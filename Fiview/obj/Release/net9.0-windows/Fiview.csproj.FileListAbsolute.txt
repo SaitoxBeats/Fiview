@@ -1,0 +1,17 @@
+D:\CodeProjects\C#\Fiview\FiviewSolution\Fiview\bin\Release\net9.0-windows\Fiview.exe
+D:\CodeProjects\C#\Fiview\FiviewSolution\Fiview\bin\Release\net9.0-windows\Fiview.deps.json
+D:\CodeProjects\C#\Fiview\FiviewSolution\Fiview\bin\Release\net9.0-windows\Fiview.runtimeconfig.json
+D:\CodeProjects\C#\Fiview\FiviewSolution\Fiview\bin\Release\net9.0-windows\Fiview.dll
+D:\CodeProjects\C#\Fiview\FiviewSolution\Fiview\bin\Release\net9.0-windows\Fiview.pdb
+D:\CodeProjects\C#\Fiview\FiviewSolution\Fiview\obj\Release\net9.0-windows\Fiview.imgView_Form.resources
+D:\CodeProjects\C#\Fiview\FiviewSolution\Fiview\obj\Release\net9.0-windows\Fiview.init_Form.resources
+D:\CodeProjects\C#\Fiview\FiviewSolution\Fiview\obj\Release\net9.0-windows\Fiview.csproj.GenerateResource.cache
+D:\CodeProjects\C#\Fiview\FiviewSolution\Fiview\obj\Release\net9.0-windows\Fiview.GeneratedMSBuildEditorConfig.editorconfig
+D:\CodeProjects\C#\Fiview\FiviewSolution\Fiview\obj\Release\net9.0-windows\Fiview.AssemblyInfoInputs.cache
+D:\CodeProjects\C#\Fiview\FiviewSolution\Fiview\obj\Release\net9.0-windows\Fiview.AssemblyInfo.cs
+D:\CodeProjects\C#\Fiview\FiviewSolution\Fiview\obj\Release\net9.0-windows\Fiview.csproj.CoreCompileInputs.cache
+D:\CodeProjects\C#\Fiview\FiviewSolution\Fiview\obj\Release\net9.0-windows\Fiview.dll
+D:\CodeProjects\C#\Fiview\FiviewSolution\Fiview\obj\Release\net9.0-windows\refint\Fiview.dll
+D:\CodeProjects\C#\Fiview\FiviewSolution\Fiview\obj\Release\net9.0-windows\Fiview.pdb
+D:\CodeProjects\C#\Fiview\FiviewSolution\Fiview\obj\Release\net9.0-windows\Fiview.genruntimeconfig.cache
+D:\CodeProjects\C#\Fiview\FiviewSolution\Fiview\obj\Release\net9.0-windows\ref\Fiview.dll
