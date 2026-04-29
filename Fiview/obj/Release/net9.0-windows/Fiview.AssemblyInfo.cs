@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("Fiview")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Release")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+9f48880d002daf912b8ae970fe2b8ea650bd31b5")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+cf28ac22914cb14eab3baa5dfe46b4bef775180f")]
 [assembly: System.Reflection.AssemblyProductAttribute("Fiview")]
 [assembly: System.Reflection.AssemblyTitleAttribute("Fiview")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

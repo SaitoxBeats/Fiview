@@ -1,6 +1,7 @@
 using System.Runtime.InteropServices;
 using System.Drawing.Imaging;
 using SixLabors.ImageSharp.PixelFormats;
+using SixLabors.ImageSharp.Processing;
 
 using ImageSharpImage = SixLabors.ImageSharp.Image;
 
@@ -8,6 +9,8 @@ namespace Fiview;
 
 public partial class imgView_Form : Form
 {
+    private const int PreviewCompressionThreshold = 1000;
+
     private static readonly HashSet<string> ImageExtensions = new(StringComparer.OrdinalIgnoreCase)
     {
         ".jpg",
@@ -20,11 +23,14 @@ public partial class imgView_Form : Form
 
     private ContextMenuStrip? contextMenu;
     private readonly object cacheLock = new();
-    private readonly Dictionary<string, Bitmap> preloadedImages = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, LoadedImage> preloadedImages = new(StringComparer.OrdinalIgnoreCase);
     private CancellationTokenSource? preloadCancellation;
     private int currentImageIndex = -1;
     private string[] imageFiles = [];
     private string? currentDirectory;
+    private string? currentImagePath;
+    private bool currentImageIsPreview;
+    private bool currentImageHasPreview;
 
     public imgView_Form(string? initialImagePath = null)
     {
@@ -33,6 +39,8 @@ public partial class imgView_Form : Form
 
         KeyPreview = true;
         KeyDown += imgViewForm_KeyDown;
+        img_ref.FullQualityRequested += imgRef_FullQualityRequested;
+        img_ref.PreviewQualityRequested += imgRef_PreviewQualityRequested;
 
         AllowDrop = true;
         DragEnter += imgViewForm_DragEnter;
@@ -70,9 +78,13 @@ public partial class imgView_Form : Form
                     file => string.Equals(file, fullPath, StringComparison.OrdinalIgnoreCase));
             }
 
-            var bitmap = TakePreloadedImage(fullPath) ?? DecodeImage(fullPath);
+            var loadedImage = TakePreloadedImage(fullPath) ?? DecodeDisplayImage(fullPath);
 
-            img_ref.SetImage(bitmap);
+            currentImagePath = fullPath;
+            currentImageIsPreview = loadedImage.IsPreview;
+            currentImageHasPreview = ShouldUsePreview(loadedImage.NaturalSize.Width, loadedImage.NaturalSize.Height);
+
+            img_ref.SetImage(loadedImage.Bitmap, loadedImage.IsPreview, loadedImage.NaturalSize);
             UpdateWindowTitle(fullPath);
             RestoreWindow();
             PreloadNeighborImages();
@@ -141,6 +153,50 @@ public partial class imgView_Form : Form
         }
     }
 
+    private void imgRef_FullQualityRequested(object? sender, EventArgs e)
+    {
+        if (!currentImageIsPreview || string.IsNullOrWhiteSpace(currentImagePath))
+        {
+            return;
+        }
+
+        try
+        {
+            var fullQualityBitmap = DecodeImage(currentImagePath);
+            currentImageIsPreview = false;
+            img_ref.SetImage(fullQualityBitmap, naturalSize: fullQualityBitmap.Size, preserveView: true);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Erro ao carregar imagem original: {ex.Message}", "Fiview", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+    }
+
+    private void imgRef_PreviewQualityRequested(object? sender, EventArgs e)
+    {
+        if (currentImageIsPreview || !currentImageHasPreview || string.IsNullOrWhiteSpace(currentImagePath))
+        {
+            return;
+        }
+
+        try
+        {
+            var info = ImageSharpImage.Identify(currentImagePath);
+            if (info is null)
+            {
+                return;
+            }
+
+            var previewBitmap = DecodePreviewImage(currentImagePath, info.Width, info.Height);
+            currentImageIsPreview = true;
+            img_ref.SetImage(previewBitmap, isPreviewImage: true, naturalSize: new Size(info.Width, info.Height), preserveView: true);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Erro ao restaurar preview da imagem: {ex.Message}", "Fiview", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+    }
+
     protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
     {
         switch (keyData)
@@ -204,17 +260,29 @@ public partial class imgView_Form : Form
             file => string.Equals(file, initialPath, StringComparison.OrdinalIgnoreCase));
     }
 
-    private Bitmap? TakePreloadedImage(string path)
+    private LoadedImage? TakePreloadedImage(string path)
     {
         lock (cacheLock)
         {
-            if (!preloadedImages.Remove(path, out var bitmap))
+            if (!preloadedImages.Remove(path, out var loadedImage))
             {
                 return null;
             }
 
-            return bitmap;
+            return loadedImage;
         }
+    }
+
+    private static LoadedImage DecodeDisplayImage(string path)
+    {
+        var info = ImageSharpImage.Identify(path);
+        if (info is not null && ShouldUsePreview(info.Width, info.Height))
+        {
+            return new LoadedImage(DecodePreviewImage(path, info.Width, info.Height), true, new Size(info.Width, info.Height));
+        }
+
+        var bitmap = DecodeImage(path);
+        return new LoadedImage(bitmap, false, bitmap.Size);
     }
 
     private static Bitmap DecodeImage(string path)
@@ -228,9 +296,33 @@ public partial class imgView_Form : Form
         return new Bitmap(source);
     }
 
+    private static bool ShouldUsePreview(int width, int height)
+    {
+        return width > PreviewCompressionThreshold || height > PreviewCompressionThreshold;
+    }
+
+    private static Bitmap DecodePreviewImage(string path, int sourceWidth, int sourceHeight)
+    {
+        using var image = ImageSharpImage.Load<Rgba32>(path);
+        var scale = Math.Min(
+            (float)PreviewCompressionThreshold / sourceWidth,
+            (float)PreviewCompressionThreshold / sourceHeight);
+
+        var previewWidth = Math.Max(1, (int)MathF.Round(sourceWidth * scale));
+        var previewHeight = Math.Max(1, (int)MathF.Round(sourceHeight * scale));
+
+        image.Mutate(context => context.Resize(previewWidth, previewHeight));
+        return ToBitmap(image);
+    }
+
     private static Bitmap DecodeWebpImage(string path)
     {
         using var image = ImageSharpImage.Load<Rgba32>(path);
+        return ToBitmap(image);
+    }
+
+    private static Bitmap ToBitmap(SixLabors.ImageSharp.Image<Rgba32> image)
+    {
         var bitmap = new Bitmap(image.Width, image.Height, PixelFormat.Format32bppArgb);
         var bounds = new Rectangle(0, 0, bitmap.Width, bitmap.Height);
         var bitmapData = bitmap.LockBits(bounds, ImageLockMode.WriteOnly, PixelFormat.Format32bppArgb);
@@ -309,10 +401,10 @@ public partial class imgView_Form : Form
                     }
                 }
 
-                Bitmap? bitmap = null;
+                LoadedImage? loadedImage = null;
                 try
                 {
-                    bitmap = DecodeImage(target);
+                    loadedImage = DecodeDisplayImage(target);
                 }
                 catch
                 {
@@ -321,7 +413,7 @@ public partial class imgView_Form : Form
 
                 if (token.IsCancellationRequested)
                 {
-                    bitmap.Dispose();
+                    loadedImage.Bitmap.Dispose();
                     break;
                 }
 
@@ -329,11 +421,11 @@ public partial class imgView_Form : Form
                 {
                     if (preloadedImages.ContainsKey(target))
                     {
-                        bitmap.Dispose();
+                        loadedImage.Bitmap.Dispose();
                     }
                     else
                     {
-                        preloadedImages[target] = bitmap;
+                        preloadedImages[target] = loadedImage;
                     }
                 }
             }
@@ -361,7 +453,7 @@ public partial class imgView_Form : Form
         {
             foreach (var path in preloadedImages.Keys.Where(path => !keep.Contains(path)).ToArray())
             {
-                preloadedImages[path].Dispose();
+                preloadedImages[path].Bitmap.Dispose();
                 preloadedImages.Remove(path);
             }
         }
@@ -371,9 +463,9 @@ public partial class imgView_Form : Form
     {
         lock (cacheLock)
         {
-            foreach (var bitmap in preloadedImages.Values)
+            foreach (var loadedImage in preloadedImages.Values)
             {
-                bitmap.Dispose();
+                loadedImage.Bitmap.Dispose();
             }
 
             preloadedImages.Clear();
@@ -457,4 +549,6 @@ public partial class imgView_Form : Form
         ClearPreloadedImages();
         base.OnFormClosed(e);
     }
+
+    private sealed record LoadedImage(Bitmap Bitmap, bool IsPreview, Size NaturalSize);
 }

@@ -9,11 +9,16 @@ internal sealed class ImageCanvas : Control
     private const float MaxZoom = 32.0f;
 
     private Image? _image;
+    private Size _naturalSize;
     private float _zoom = 1.0f;
     private PointF _imageOrigin;
     private Point _lastMousePosition;
     private bool _isDragging;
     private bool _fitToViewport = true;
+    private bool _isPreviewImage;
+
+    public event EventHandler? FullQualityRequested;
+    public event EventHandler? PreviewQualityRequested;
 
     public ImageCanvas()
     {
@@ -31,20 +36,40 @@ internal sealed class ImageCanvas : Control
 
     public bool HasImage => _image is not null;
 
-    public void SetImage(Image image)
+    public void SetImage(
+        Image image,
+        bool isPreviewImage = false,
+        Size? naturalSize = null,
+        bool preserveView = false)
     {
         var oldImage = _image;
         _image = image;
+        _naturalSize = naturalSize ?? image.Size;
+        _isPreviewImage = isPreviewImage;
         oldImage?.Dispose();
 
-        ResetView();
+        if (preserveView)
+        {
+            Invalidate();
+        }
+        else
+        {
+            ResetViewCore();
+        }
     }
 
     public void ResetView()
     {
+        ResetViewCore();
+        RequestPreviewIfNeeded();
+    }
+
+    private void ResetViewCore()
+    {
         if (_image is null)
         {
             _zoom = 1.0f;
+            _naturalSize = Size.Empty;
             _imageOrigin = PointF.Empty;
             Invalidate();
             return;
@@ -93,7 +118,13 @@ internal sealed class ImageCanvas : Control
             return;
         }
 
+        if (_isPreviewImage)
+        {
+            FullQualityRequested?.Invoke(this, EventArgs.Empty);
+        }
+
         ZoomAt(e.Location, e.Delta > 0 ? ZoomStep : 1.0f / ZoomStep);
+        RequestPreviewIfNeeded();
     }
 
     protected override void OnMouseDown(MouseEventArgs e)
@@ -129,6 +160,16 @@ internal sealed class ImageCanvas : Control
         Invalidate();
     }
 
+    private void RequestPreviewIfNeeded()
+    {
+        if (_image is null || _isPreviewImage || _zoom > GetFitZoom() + 0.0001f)
+        {
+            return;
+        }
+
+        PreviewQualityRequested?.Invoke(this, EventArgs.Empty);
+    }
+
     protected override void OnMouseUp(MouseEventArgs e)
     {
         base.OnMouseUp(e);
@@ -162,8 +203,8 @@ internal sealed class ImageCanvas : Control
         var destination = new RectangleF(
             _imageOrigin.X,
             _imageOrigin.Y,
-            _image.Width * _zoom,
-            _image.Height * _zoom);
+            _naturalSize.Width * _zoom,
+            _naturalSize.Height * _zoom);
 
         e.Graphics.DrawImage(_image, destination);
     }
@@ -201,8 +242,8 @@ internal sealed class ImageCanvas : Control
             return 1.0f;
         }
 
-        var widthScale = (float)ClientSize.Width / _image.Width;
-        var heightScale = (float)ClientSize.Height / _image.Height;
+        var widthScale = (float)ClientSize.Width / _naturalSize.Width;
+        var heightScale = (float)ClientSize.Height / _naturalSize.Height;
         return Math.Min(1.0f, Math.Min(widthScale, heightScale));
     }
 
@@ -213,8 +254,8 @@ internal sealed class ImageCanvas : Control
             return;
         }
 
-        var imageWidth = _image.Width * _zoom;
-        var imageHeight = _image.Height * _zoom;
+        var imageWidth = _naturalSize.Width * _zoom;
+        var imageHeight = _naturalSize.Height * _zoom;
 
         if (imageWidth <= ClientSize.Width)
         {
