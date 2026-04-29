@@ -1,29 +1,32 @@
 {
   "format": 1,
   "restore": {
-    "D:\\CodeProjects\\C#\\Fiview\\FiviewSolution\\Fiview\\Fiview.csproj": {}
+    "C:\\Users\\nikkkkoooooo\\Documents\\GitHub\\Fiview\\Fiview\\Fiview.csproj": {}
   },
   "projects": {
-    "D:\\CodeProjects\\C#\\Fiview\\FiviewSolution\\Fiview\\Fiview.csproj": {
+    "C:\\Users\\nikkkkoooooo\\Documents\\GitHub\\Fiview\\Fiview\\Fiview.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "D:\\CodeProjects\\C#\\Fiview\\FiviewSolution\\Fiview\\Fiview.csproj",
+        "projectUniqueName": "C:\\Users\\nikkkkoooooo\\Documents\\GitHub\\Fiview\\Fiview\\Fiview.csproj",
         "projectName": "Fiview",
-        "projectPath": "D:\\CodeProjects\\C#\\Fiview\\FiviewSolution\\Fiview\\Fiview.csproj",
-        "packagesPath": "C:\\Users\\Saitox\\.nuget\\packages\\",
-        "outputPath": "D:\\CodeProjects\\C#\\Fiview\\FiviewSolution\\Fiview\\obj\\",
+        "projectPath": "C:\\Users\\nikkkkoooooo\\Documents\\GitHub\\Fiview\\Fiview\\Fiview.csproj",
+        "packagesPath": "C:\\Users\\nikkkkoooooo\\.nuget\\packages\\",
+        "outputPath": "C:\\Users\\nikkkkoooooo\\Documents\\GitHub\\Fiview\\Fiview\\obj\\",
         "projectStyle": "PackageReference",
         "configFilePaths": [
-          "C:\\Users\\Saitox\\AppData\\Roaming\\NuGet\\NuGet.Config"
+          "C:\\Users\\nikkkkoooooo\\AppData\\Roaming\\NuGet\\NuGet.Config",
+          "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.Offline.config"
         ],
         "originalTargetFrameworks": [
           "net9.0-windows"
         ],
         "sources": {
+          "C:\\Program Files (x86)\\Microsoft SDKs\\NuGetPackages\\": {},
           "https://api.nuget.org/v3/index.json": {}
         },
         "frameworks": {
-          "net9.0-windows7.0": {
+          "net9.0-windows": {
+            "framework": "net9.0-windows7.0",
             "targetAlias": "net9.0-windows",
             "projectReferences": {}
           }
@@ -38,11 +41,18 @@
           "auditLevel": "low",
           "auditMode": "direct"
         },
-        "SdkAnalysisLevel": "9.0.100"
+        "SdkAnalysisLevel": "10.0.200"
       },
       "frameworks": {
-        "net9.0-windows7.0": {
+        "net9.0-windows": {
+          "framework": "net9.0-windows7.0",
           "targetAlias": "net9.0-windows",
+          "dependencies": {
+            "SixLabors.ImageSharp": {
+              "target": "Package",
+              "version": "[3.1.12, )"
+            }
+          },
           "imports": [
             "net461",
             "net462",
@@ -54,6 +64,24 @@
           ],
           "assetTargetFallback": true,
           "warn": true,
+          "downloadDependencies": [
+            {
+              "name": "Microsoft.AspNetCore.App.Ref",
+              "version": "[9.0.15, 9.0.15]"
+            },
+            {
+              "name": "Microsoft.NETCore.App.Host.win-x64",
+              "version": "[9.0.15, 9.0.15]"
+            },
+            {
+              "name": "Microsoft.NETCore.App.Ref",
+              "version": "[9.0.15, 9.0.15]"
+            },
+            {
+              "name": "Microsoft.WindowsDesktop.App.Ref",
+              "version": "[9.0.15, 9.0.15]"
+            }
+          ],
           "frameworkReferences": {
             "Microsoft.NETCore.App": {
               "privateAssets": "all"
@@ -62,7 +90,7 @@
               "privateAssets": "none"
             }
           },
-          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\9.0.102/PortableRuntimeIdentifierGraph.json"
+          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\10.0.202/PortableRuntimeIdentifierGraph.json"
         }
       }
     }

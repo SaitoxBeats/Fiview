@@ -1,0 +1,18 @@
+# IDE caches
+.vs/
+.idea/
+*.user
+*.suo
+
+# Build outputs
+bin/
+obj/
+**/bin/
+**/obj/
+
+# Rider / ReSharper local state
+*.DotSettings.user
+
+# OS files
+Thumbs.db
+Desktop.ini

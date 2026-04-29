@@ -4,23 +4,17 @@ namespace Fiview;
 
 public partial class init_Form : Form
 {
+    public event EventHandler? OpenImageRequested;
+
     public init_Form()
     {
         InitializeComponent();
         ConfigureForm();
     }
 
-    private void button1_Click(object sender, EventArgs e)
+    private void button1_Click(object? sender, EventArgs e)
     {
-        imgView_Form imgViewForm = new imgView_Form();
-        imgViewForm.Show();
-        this.Hide();
-        imgViewForm.FormClosed += onForm1Closed;
-    }
-
-    private void onForm1Closed(object sender, FormClosedEventArgs e)
-    {
-        this.Close();
+        OpenImageRequested?.Invoke(this, EventArgs.Empty);
     }
     
     private void ConfigureForm()
@@ -36,7 +30,7 @@ public partial class init_Form : Form
     private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int attrValue, int attrSize);
     private const int DWMWA_USE_IMMERSIVE_DARK_MODE = 20;
     
-    private void SetWindowDarkMode(IntPtr handle)
+    private static void SetWindowDarkMode(IntPtr handle)
     {
         if (Environment.OSVersion.Version.Major >= 10)
         {
@@ -45,7 +39,7 @@ public partial class init_Form : Form
         }
     }
 
-    private void button2_Click(object sender, EventArgs e)
+    private void button2_Click(object? sender, EventArgs e)
     {
         MessageBox.Show("Hi my name is Saitox :) - https://saitoxbeats.github.io/", "Hey!!", MessageBoxButtons.OK, MessageBoxIcon.Exclamation);
     }

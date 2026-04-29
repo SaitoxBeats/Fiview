@@ -31,23 +31,19 @@ partial class imgView_Form
     {
         components = new System.ComponentModel.Container();
         System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(imgView_Form));
-        img_ref = new System.Windows.Forms.PictureBox();
+        img_ref = new ImageCanvas();
         contextMenuStrip1 = new System.Windows.Forms.ContextMenuStrip(components);
-        ((System.ComponentModel.ISupportInitialize)img_ref).BeginInit();
         SuspendLayout();
         // 
         // img_ref
         // 
-        img_ref.BackgroundImageLayout = System.Windows.Forms.ImageLayout.Stretch;
         img_ref.Dock = System.Windows.Forms.DockStyle.Fill;
         img_ref.Location = new System.Drawing.Point(0, 0);
         img_ref.Margin = new System.Windows.Forms.Padding(0);
         img_ref.Name = "img_ref";
         img_ref.Size = new System.Drawing.Size(784, 561);
-        img_ref.SizeMode = System.Windows.Forms.PictureBoxSizeMode.AutoSize;
         img_ref.TabIndex = 0;
-        img_ref.TabStop = false;
-        img_ref.WaitOnLoad = true;
+        img_ref.TabStop = true;
         // 
         // contextMenuStrip1
         // 
@@ -63,14 +59,12 @@ partial class imgView_Form
         Controls.Add(img_ref);
         Icon = ((System.Drawing.Icon)resources.GetObject("$this.Icon"));
         Text = "imgView_Form";
-        ((System.ComponentModel.ISupportInitialize)img_ref).EndInit();
         ResumeLayout(false);
-        PerformLayout();
     }
 
     private System.Windows.Forms.ContextMenuStrip contextMenuStrip1;
 
-    private System.Windows.Forms.PictureBox img_ref;
+    private ImageCanvas img_ref;
 
     #endregion
 }
