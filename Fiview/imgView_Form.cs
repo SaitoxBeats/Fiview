@@ -84,7 +84,7 @@ public partial class imgView_Form : Form
             currentImageIsPreview = loadedImage.IsPreview;
             currentImageHasPreview = ShouldUsePreview(loadedImage.NaturalSize.Width, loadedImage.NaturalSize.Height);
 
-            img_ref.SetImage(loadedImage.Bitmap, loadedImage.IsPreview, loadedImage.NaturalSize);
+            img_ref.SetImage(loadedImage.Image, loadedImage.IsPreview, loadedImage.NaturalSize);
             UpdateWindowTitle(fullPath);
             RestoreWindow();
             PreloadNeighborImages();
@@ -162,9 +162,9 @@ public partial class imgView_Form : Form
 
         try
         {
-            var fullQualityBitmap = DecodeImage(currentImagePath);
+            var fullQualityImage = DecodeImage(currentImagePath);
             currentImageIsPreview = false;
-            img_ref.SetImage(fullQualityBitmap, naturalSize: fullQualityBitmap.Size, preserveView: true);
+            img_ref.SetImage(fullQualityImage, naturalSize: fullQualityImage.Size, preserveView: true);
         }
         catch (Exception ex)
         {
@@ -187,9 +187,9 @@ public partial class imgView_Form : Form
                 return;
             }
 
-            var previewBitmap = DecodePreviewImage(currentImagePath, info.Width, info.Height);
+            var previewImage = DecodePreviewImage(currentImagePath, info.Width, info.Height);
             currentImageIsPreview = true;
-            img_ref.SetImage(previewBitmap, isPreviewImage: true, naturalSize: new Size(info.Width, info.Height), preserveView: true);
+            img_ref.SetImage(previewImage, isPreviewImage: true, naturalSize: new Size(info.Width, info.Height), preserveView: true);
         }
         catch (Exception ex)
         {
@@ -275,6 +275,12 @@ public partial class imgView_Form : Form
 
     private static LoadedImage DecodeDisplayImage(string path)
     {
+        if (IsGifFile(path))
+        {
+            var image = DecodeImage(path);
+            return new LoadedImage(image, false, image.Size);
+        }
+
         var info = ImageSharpImage.Identify(path);
         if (info is not null && ShouldUsePreview(info.Width, info.Height))
         {
@@ -285,8 +291,13 @@ public partial class imgView_Form : Form
         return new LoadedImage(bitmap, false, bitmap.Size);
     }
 
-    private static Bitmap DecodeImage(string path)
+    private static Image DecodeImage(string path)
     {
+        if (IsGifFile(path))
+        {
+            return Image.FromFile(path);
+        }
+
         if (string.Equals(Path.GetExtension(path), ".webp", StringComparison.OrdinalIgnoreCase))
         {
             return DecodeWebpImage(path);
@@ -294,6 +305,11 @@ public partial class imgView_Form : Form
 
         using var source = Image.FromFile(path);
         return new Bitmap(source);
+    }
+
+    private static bool IsGifFile(string path)
+    {
+        return string.Equals(Path.GetExtension(path), ".gif", StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool ShouldUsePreview(int width, int height)
@@ -413,7 +429,7 @@ public partial class imgView_Form : Form
 
                 if (token.IsCancellationRequested)
                 {
-                    loadedImage.Bitmap.Dispose();
+                    loadedImage.Image.Dispose();
                     break;
                 }
 
@@ -421,7 +437,7 @@ public partial class imgView_Form : Form
                 {
                     if (preloadedImages.ContainsKey(target))
                     {
-                        loadedImage.Bitmap.Dispose();
+                        loadedImage.Image.Dispose();
                     }
                     else
                     {
@@ -453,7 +469,7 @@ public partial class imgView_Form : Form
         {
             foreach (var path in preloadedImages.Keys.Where(path => !keep.Contains(path)).ToArray())
             {
-                preloadedImages[path].Bitmap.Dispose();
+                preloadedImages[path].Image.Dispose();
                 preloadedImages.Remove(path);
             }
         }
@@ -465,7 +481,7 @@ public partial class imgView_Form : Form
         {
             foreach (var loadedImage in preloadedImages.Values)
             {
-                loadedImage.Bitmap.Dispose();
+                loadedImage.Image.Dispose();
             }
 
             preloadedImages.Clear();
@@ -550,5 +566,5 @@ public partial class imgView_Form : Form
         base.OnFormClosed(e);
     }
 
-    private sealed record LoadedImage(Bitmap Bitmap, bool IsPreview, Size NaturalSize);
+    private sealed record LoadedImage(Image Image, bool IsPreview, Size NaturalSize);
 }

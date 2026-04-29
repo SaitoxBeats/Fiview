@@ -16,6 +16,7 @@ internal sealed class ImageCanvas : Control
     private bool _isDragging;
     private bool _fitToViewport = true;
     private bool _isPreviewImage;
+    private EventHandler? _animationHandler;
 
     public event EventHandler? FullQualityRequested;
     public event EventHandler? PreviewQualityRequested;
@@ -43,10 +44,13 @@ internal sealed class ImageCanvas : Control
         bool preserveView = false)
     {
         var oldImage = _image;
+        StopAnimation(oldImage);
+
         _image = image;
         _naturalSize = naturalSize ?? image.Size;
         _isPreviewImage = isPreviewImage;
         oldImage?.Dispose();
+        StartAnimation(_image);
 
         if (preserveView)
         {
@@ -85,6 +89,7 @@ internal sealed class ImageCanvas : Control
     {
         if (disposing)
         {
+            StopAnimation(_image);
             _image?.Dispose();
             _image = null;
         }
@@ -200,6 +205,11 @@ internal sealed class ImageCanvas : Control
             ? InterpolationMode.NearestNeighbor
             : InterpolationMode.HighQualityBilinear;
 
+        if (ImageAnimator.CanAnimate(_image))
+        {
+            ImageAnimator.UpdateFrames(_image);
+        }
+
         var destination = new RectangleF(
             _imageOrigin.X,
             _imageOrigin.Y,
@@ -266,5 +276,47 @@ internal sealed class ImageCanvas : Control
         {
             _imageOrigin.Y = (ClientSize.Height - imageHeight) / 2.0f;
         }
+    }
+
+    private void StartAnimation(Image? image)
+    {
+        if (image is null || !ImageAnimator.CanAnimate(image))
+        {
+            return;
+        }
+
+        _animationHandler = (_, _) =>
+        {
+            if (IsDisposed)
+            {
+                return;
+            }
+
+            if (InvokeRequired)
+            {
+                BeginInvoke((Action)Invalidate);
+            }
+            else
+            {
+                Invalidate();
+            }
+        };
+
+        ImageAnimator.Animate(image, _animationHandler);
+    }
+
+    private void StopAnimation(Image? image)
+    {
+        if (image is null || _animationHandler is null)
+        {
+            return;
+        }
+
+        if (ImageAnimator.CanAnimate(image))
+        {
+            ImageAnimator.StopAnimate(image, _animationHandler);
+        }
+
+        _animationHandler = null;
     }
 }
