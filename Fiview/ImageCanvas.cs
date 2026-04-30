@@ -118,7 +118,7 @@ internal sealed class ImageCanvas : Control
     {
         base.OnMouseWheel(e);
 
-        if (_image is null || ModifierKeys != Keys.Control)
+        if (_image is null)
         {
             return;
         }
