@@ -1,12 +1,22 @@
-using System.Runtime.InteropServices;
+// Purpose: Coordinate image loading, keyboard shortcuts, crop-save flow, and viewer lifecycle behavior.
 using System.Drawing.Imaging;
+using System.Runtime.InteropServices;
+using SixLabors.ImageSharp.Formats;
+using SixLabors.ImageSharp.Formats.Bmp;
+using SixLabors.ImageSharp.Formats.Jpeg;
+using SixLabors.ImageSharp.Formats.Png;
+using SixLabors.ImageSharp.Formats.Webp;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Processing;
 
 using ImageSharpImage = SixLabors.ImageSharp.Image;
+using ImageSharpRectangle = SixLabors.ImageSharp.Rectangle;
 
 namespace Fiview;
 
+/// <summary>
+/// Main viewer window responsible for image navigation, quality switching, and crop workflow orchestration.
+/// </summary>
 public partial class imgView_Form : Form
 {
     private const int PreviewCompressionThreshold = 1000;
@@ -21,6 +31,15 @@ public partial class imgView_Form : Form
         ".webp"
     };
 
+    private static readonly string[] CropSaveExtensions =
+    [
+        ".jpg",
+        ".jpeg",
+        ".png",
+        ".bmp",
+        ".webp"
+    ];
+
     private ContextMenuStrip? contextMenu;
     private readonly object cacheLock = new();
     private readonly Dictionary<string, LoadedImage> preloadedImages = new(StringComparer.OrdinalIgnoreCase);
@@ -31,6 +50,9 @@ public partial class imgView_Form : Form
     private string? currentImagePath;
     private bool currentImageIsPreview;
     private bool currentImageHasPreview;
+    private Size currentImageNaturalSize;
+    private bool controlKeyPressed;
+    private bool controlKeyUsedByShortcut;
 
     public imgView_Form(string? initialImagePath = null)
     {
@@ -39,6 +61,8 @@ public partial class imgView_Form : Form
 
         KeyPreview = true;
         KeyDown += imgViewForm_KeyDown;
+        KeyUp += imgViewForm_KeyUp;
+        img_ref.MouseWheel += imgRef_MouseWheel;
         img_ref.FullQualityRequested += imgRef_FullQualityRequested;
         img_ref.PreviewQualityRequested += imgRef_PreviewQualityRequested;
 
@@ -56,8 +80,16 @@ public partial class imgView_Form : Form
         }
     }
 
+    /// <summary>
+    /// Loads the requested image path into the viewer after resolving any pending crop session.
+    /// </summary>
     public void LoadImage(string path)
     {
+        if (!TryLeaveCropModeIfNeeded())
+        {
+            return;
+        }
+
         try
         {
             var fullPath = Path.GetFullPath(path);
@@ -76,14 +108,23 @@ public partial class imgView_Form : Form
                 currentImageIndex = Array.FindIndex(
                     imageFiles,
                     file => string.Equals(file, fullPath, StringComparison.OrdinalIgnoreCase));
+
+                // Refresh the directory listing when a new file appears in the already-open folder,
+                // such as when a crop is saved beside the current image.
+                if (currentImageIndex < 0)
+                {
+                    LoadImageList(fullPath);
+                }
             }
 
             var loadedImage = TakePreloadedImage(fullPath) ?? DecodeDisplayImage(fullPath);
 
             currentImagePath = fullPath;
             currentImageIsPreview = loadedImage.IsPreview;
+            currentImageNaturalSize = loadedImage.NaturalSize;
             currentImageHasPreview = ShouldUsePreview(loadedImage.NaturalSize.Width, loadedImage.NaturalSize.Height);
 
+            img_ref.ExitCropMode(clearSelection: true);
             img_ref.SetImage(loadedImage.Image, loadedImage.IsPreview, loadedImage.NaturalSize);
             UpdateWindowTitle(fullPath);
             RestoreWindow();
@@ -123,6 +164,11 @@ public partial class imgView_Form : Form
 
     private void OpenImageDialog()
     {
+        if (!TryLeaveCropModeIfNeeded())
+        {
+            return;
+        }
+
         using var openFileDialog = new OpenFileDialog
         {
             Filter = "Imagens|*.jpg;*.jpeg;*.png;*.bmp;*.gif;*.webp"
@@ -136,6 +182,19 @@ public partial class imgView_Form : Form
 
     private void imgViewForm_KeyDown(object? sender, KeyEventArgs e)
     {
+        if (e.KeyCode == Keys.ControlKey)
+        {
+            controlKeyPressed = true;
+            controlKeyUsedByShortcut = false;
+            e.Handled = true;
+            return;
+        }
+
+        if (controlKeyPressed)
+        {
+            controlKeyUsedByShortcut = true;
+        }
+
         switch (e.KeyCode)
         {
             case Keys.Left:
@@ -150,7 +209,195 @@ public partial class imgView_Form : Form
                 img_ref.ResetView();
                 e.Handled = true;
                 break;
+            case Keys.Escape:
+                if (img_ref.IsCropModeActive)
+                {
+                    TryLeaveCropModeIfNeeded();
+                    e.Handled = true;
+                }
+                break;
         }
+    }
+
+    private void imgViewForm_KeyUp(object? sender, KeyEventArgs e)
+    {
+        if (e.KeyCode != Keys.ControlKey)
+        {
+            return;
+        }
+
+        var shouldToggleCropMode = controlKeyPressed && !controlKeyUsedByShortcut;
+        controlKeyPressed = false;
+        controlKeyUsedByShortcut = false;
+
+        if (!shouldToggleCropMode)
+        {
+            return;
+        }
+
+        ToggleCropMode();
+        e.Handled = true;
+    }
+
+    private void imgRef_MouseWheel(object? sender, MouseEventArgs e)
+    {
+        if ((ModifierKeys & Keys.Control) == Keys.Control)
+        {
+            controlKeyUsedByShortcut = true;
+        }
+    }
+
+    /// <summary>
+    /// Switches between view mode and crop mode using the current image.
+    /// </summary>
+    private void ToggleCropMode()
+    {
+        if (!img_ref.HasImage)
+        {
+            return;
+        }
+
+        if (!img_ref.IsCropModeActive)
+        {
+            img_ref.EnterCropMode();
+            UpdateWindowTitle(currentImagePath);
+            return;
+        }
+
+        TryLeaveCropModeIfNeeded(reloadSavedImageAfterSave: true);
+    }
+
+    /// <summary>
+    /// Resolves the active crop session by either discarding it or saving it first.
+    /// </summary>
+    private bool TryLeaveCropModeIfNeeded(bool reloadSavedImageAfterSave = false)
+    {
+        if (!img_ref.IsCropModeActive)
+        {
+            return true;
+        }
+
+        if (!img_ref.HasCropSelection)
+        {
+            img_ref.ExitCropMode(clearSelection: true);
+            UpdateWindowTitle(currentImagePath);
+            return true;
+        }
+
+        var dialogResult = MessageBox.Show(
+            "Deseja salvar o recorte antes de sair do modo de edicao?",
+            "Salvar recorte",
+            MessageBoxButtons.YesNoCancel,
+            MessageBoxIcon.Question);
+
+        switch (dialogResult)
+        {
+            case DialogResult.Yes:
+                return SaveCurrentCropSelection(reloadSavedImageAfterSave);
+            case DialogResult.No:
+                img_ref.ExitCropMode(clearSelection: true);
+                UpdateWindowTitle(currentImagePath);
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    /// <summary>
+    /// Saves the current selection from the original image data and then loads the saved result.
+    /// </summary>
+    private bool SaveCurrentCropSelection(bool reloadSavedImageAfterSave)
+    {
+        if (string.IsNullOrWhiteSpace(currentImagePath))
+        {
+            return false;
+        }
+
+        var selection = img_ref.GetCropSelection();
+        if (selection is null || selection.Value.Width <= 0 || selection.Value.Height <= 0)
+        {
+            img_ref.ExitCropMode(clearSelection: true);
+            UpdateWindowTitle(currentImagePath);
+            return true;
+        }
+
+        var defaultExtension = GetDefaultCropExtension(currentImagePath);
+        using var saveFileDialog = new SaveFileDialog
+        {
+            Title = "Salvar imagem recortada",
+            Filter = "PNG image|*.png|JPEG image|*.jpg;*.jpeg|Bitmap image|*.bmp|WEBP image|*.webp",
+            DefaultExt = defaultExtension.TrimStart('.'),
+            AddExtension = true,
+            OverwritePrompt = true,
+            FileName = BuildCroppedFileName(currentImagePath, defaultExtension)
+        };
+
+        if (saveFileDialog.ShowDialog() != DialogResult.OK)
+        {
+            return false;
+        }
+
+        try
+        {
+            using var sourceImage = ImageSharpImage.Load(currentImagePath);
+            var cropArea = ClampCropSelectionToBounds(selection.Value, sourceImage.Width, sourceImage.Height);
+
+            sourceImage.Mutate(context => context.Crop(new ImageSharpRectangle(cropArea.X, cropArea.Y, cropArea.Width, cropArea.Height)));
+            using (var outputStream = File.Create(saveFileDialog.FileName))
+            {
+                sourceImage.Save(outputStream, CreateCropEncoder(saveFileDialog.FileName));
+            }
+
+            img_ref.ExitCropMode(clearSelection: true);
+            UpdateWindowTitle(currentImagePath);
+
+            if (reloadSavedImageAfterSave)
+            {
+                LoadImage(saveFileDialog.FileName);
+            }
+
+            return true;
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Erro ao salvar recorte: {ex.Message}", "Fiview", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            return false;
+        }
+    }
+
+    private static Rectangle ClampCropSelectionToBounds(Rectangle selection, int imageWidth, int imageHeight)
+    {
+        var left = Math.Clamp(selection.X, 0, Math.Max(0, imageWidth - 1));
+        var top = Math.Clamp(selection.Y, 0, Math.Max(0, imageHeight - 1));
+        var width = Math.Clamp(selection.Width, 1, imageWidth - left);
+        var height = Math.Clamp(selection.Height, 1, imageHeight - top);
+
+        return new Rectangle(left, top, width, height);
+    }
+
+    private static string BuildCroppedFileName(string sourcePath, string extension)
+    {
+        var fileNameWithoutExtension = Path.GetFileNameWithoutExtension(sourcePath);
+        return $"{fileNameWithoutExtension}_cropped{extension}";
+    }
+
+    private static string GetDefaultCropExtension(string sourcePath)
+    {
+        var sourceExtension = Path.GetExtension(sourcePath);
+        return CropSaveExtensions.Contains(sourceExtension, StringComparer.OrdinalIgnoreCase)
+            ? sourceExtension
+            : ".png";
+    }
+
+    private static IImageEncoder CreateCropEncoder(string outputPath)
+    {
+        return Path.GetExtension(outputPath).ToLowerInvariant() switch
+        {
+            ".jpg" or ".jpeg" => new JpegEncoder(),
+            ".bmp" => new BmpEncoder(),
+            ".webp" => new WebpEncoder(),
+            _ => new PngEncoder()
+        };
     }
 
     private void imgRef_FullQualityRequested(object? sender, EventArgs e)
@@ -219,11 +466,11 @@ public partial class imgView_Form : Form
             return;
         }
 
-        currentImageIndex = currentImageIndex == 0
+        var previousIndex = currentImageIndex == 0
             ? imageFiles.Length - 1
             : currentImageIndex - 1;
 
-        LoadImage(imageFiles[currentImageIndex]);
+        LoadImage(imageFiles[previousIndex]);
     }
 
     private void LoadNextImage()
@@ -233,11 +480,11 @@ public partial class imgView_Form : Form
             return;
         }
 
-        currentImageIndex = currentImageIndex == imageFiles.Length - 1
+        var nextIndex = currentImageIndex == imageFiles.Length - 1
             ? 0
             : currentImageIndex + 1;
 
-        LoadImage(imageFiles[currentImageIndex]);
+        LoadImage(imageFiles[nextIndex]);
     }
 
     private void LoadImageList(string initialPath)
@@ -488,13 +735,30 @@ public partial class imgView_Form : Form
         }
     }
 
-    private void UpdateWindowTitle(string path)
+    private void UpdateWindowTitle(string? path)
     {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            Text = img_ref.IsCropModeActive
+                ? "Fast Image View [Crop Mode]"
+                : "Fast Image View";
+            return;
+        }
+
         var position = currentImageIndex >= 0 ? currentImageIndex + 1 : 0;
         var total = imageFiles.Length;
-        Text = total > 0
-            ? $"[{position}/{total}] - {Path.GetFileName(path)} - Fast Image View"
-            : $"{Path.GetFileName(path)} - Fast Image View";
+
+        var resolution = currentImageNaturalSize.Width > 0
+            ? $" ({currentImageNaturalSize.Width}x{currentImageNaturalSize.Height})"
+            : string.Empty;
+
+        var baseTitle = total > 0
+            ? $"[{position}/{total}] - {Path.GetFileName(path)}{resolution} - Fast Image View"
+            : $"{Path.GetFileName(path)}{resolution} - Fast Image View";
+
+        Text = img_ref.IsCropModeActive
+            ? $"{baseTitle} [Crop Mode]"
+            : baseTitle;
     }
 
     private void RestoreWindow()
@@ -556,6 +820,17 @@ public partial class imgView_Form : Form
     private static bool IsImageFile(string path)
     {
         return ImageExtensions.Contains(Path.GetExtension(path));
+    }
+
+    protected override void OnFormClosing(FormClosingEventArgs e)
+    {
+        if (!TryLeaveCropModeIfNeeded())
+        {
+            e.Cancel = true;
+            return;
+        }
+
+        base.OnFormClosing(e);
     }
 
     protected override void OnFormClosed(FormClosedEventArgs e)
